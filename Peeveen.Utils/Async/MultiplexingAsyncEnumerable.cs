@@ -18,6 +18,7 @@ namespace Peeveen.Utils.Async {
 	/// <typeparam name="T">Type of data being enumerated.</typeparam>
 	public class MultiplexingAsyncEnumerable<T> : IAsyncEnumerable<T> {
 		private readonly int _consumerCount;
+		private readonly int _maxBufferSize;
 		private readonly IAsyncEnumerable<T> _source;
 		internal PersistingEnumerator<T> _persistingEnumerator;
 		private readonly object _enumeratorLock = new object();
@@ -26,11 +27,13 @@ namespace Peeveen.Utils.Async {
 		/// <summary>
 		/// Constructor.
 		/// </summary>
-		/// <param name="source"></param>
-		/// <param name="consumerCount"></param>
-		internal MultiplexingAsyncEnumerable(IAsyncEnumerable<T> source, int consumerCount) {
+		/// <param name="source">Source enumerable to wrap.</param>
+		/// <param name="consumerCount">Number of consumers.</param>
+		/// <param name="maxBufferSize">Maximum buffer size. If less than 1, buffer size will be limitless.</param>
+		internal MultiplexingAsyncEnumerable(IAsyncEnumerable<T> source, int consumerCount, int maxBufferSize = 0) {
 			_consumerCount = consumerCount;
 			_source = source;
+			_maxBufferSize = maxBufferSize;
 		}
 
 		/// <summary>
@@ -50,7 +53,7 @@ namespace Peeveen.Utils.Async {
 				throw new InvalidOperationException($"This {nameof(MultiplexingAsyncEnumerable<T>)} supports only {_consumerCount} enumerations, but {nameof(GetAsyncEnumerator)} has now been called {_enumerations} times.");
 			lock (_enumeratorLock) {
 				if (_persistingEnumerator == null)
-					_persistingEnumerator = new PersistingEnumerator<T>(_source.GetAsyncEnumerator(cancellationToken), _consumerCount);
+					_persistingEnumerator = new PersistingEnumerator<T>(_source.GetAsyncEnumerator(cancellationToken), _consumerCount, _maxBufferSize);
 			}
 			return new MultiplexingAsyncEnumerator<T>(_persistingEnumerator, thisEnumeration);
 		}
@@ -62,15 +65,17 @@ namespace Peeveen.Utils.Async {
 		private readonly IAsyncEnumerator<T> _source;
 		private readonly List<T> _buffer = new List<T>();
 		private int _bufferStartIndex;
-		private bool _noMoreData;
-		private readonly AsyncLock _mutex = new AsyncLock();
+		private bool _hasMoreData = true;
+		private readonly AsyncLock _bufferLock = new AsyncLock();
 		internal int _maxBufferSizeUsed;
 		internal int _itemsEnumerated;
 		private readonly bool _singleConsumer;
+		private readonly AsyncSemaphore _bufferSemaphore;
 
-		internal PersistingEnumerator(IAsyncEnumerator<T> source, int consumerCount) {
+		internal PersistingEnumerator(IAsyncEnumerator<T> source, int consumerCount, int maxBufferSize) {
 			if (consumerCount < 1)
 				throw new ArgumentException("There must be at least one consumer.", nameof(consumerCount));
+			_bufferSemaphore = new AsyncSemaphore(maxBufferSize < 1 ? int.MaxValue : (maxBufferSize + (consumerCount - 1)));
 			_singleConsumer = consumerCount == 1;
 			_source = source;
 			_consumerIndices = new int[consumerCount];
@@ -86,31 +91,52 @@ namespace Peeveen.Utils.Async {
 		public async ValueTask<bool> MoveNextAsync(int consumerNumber) {
 			if (_singleConsumer)
 				return await _source.MoveNextAsync();
-			using (await _mutex.LockAsync()) {
-				var nextIndex = _consumerIndices[consumerNumber] + 1 - _bufferStartIndex;
+			Func<Task<bool>> afterTask;
+			using (await _bufferLock.LockAsync()) {
+				if (!_hasMoreData)
+					return false;
+				var newConsumerIndex = ++_consumerIndices[consumerNumber];
+				var bufferIndex = newConsumerIndex - _bufferStartIndex;
 				// If there is enough data in the buffer, then yes, we can move.
-				if (nextIndex < _buffer.Count) {
-					++_consumerIndices[consumerNumber];
-					_currents[consumerNumber] = _buffer[nextIndex];
-					return true;
+				if (bufferIndex < _buffer.Count) {
+					_currents[consumerNumber] = _buffer[bufferIndex];
+					afterTask = () => Task.FromResult(true);
+				} else {
+					// Otherwise we need to add to the buffer.
+					afterTask = async () => {
+						await _bufferSemaphore.WaitAsync();
+						using (await _bufferLock.LockAsync()) {
+							// Recalculate buffer index in case start index has changed.
+							var newBufferIndex = newConsumerIndex - _bufferStartIndex;
+							if (newBufferIndex < _buffer.Count) {
+								_currents[consumerNumber] = _buffer[newBufferIndex];
+								_bufferSemaphore.Release();
+								return true;
+							}
+							var addResult = _hasMoreData = _hasMoreData && await _source.MoveNextAsync();
+							if (addResult) {
+								var current = _source.Current;
+								_currents[consumerNumber] = current;
+								_buffer.Add(current);
+								_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, _buffer.Count);
+								++_itemsEnumerated;
+							} else
+								_bufferSemaphore.Release();
+							return addResult;
+						}
+					};
 				}
-				// Otherwise we need to add to the buffer.
-				var result = !_noMoreData && await _source.MoveNextAsync();
-				_noMoreData = !result;
-				if (result) {
-					var current = _source.Current;
-					++_consumerIndices[consumerNumber];
-					_currents[consumerNumber] = current;
-					_buffer.Add(current);
-					_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, _buffer.Count);
-					_itemsEnumerated++;
-				}
+			}
+			var result = await afterTask.Invoke();
+			using (await _bufferLock.LockAsync()) {
 				var minIndex = Math.Max(_consumerIndices.Min(), 0);
 				var itemsToRemove = minIndex - _bufferStartIndex;
 				_bufferStartIndex = minIndex;
 				_buffer.RemoveRange(0, itemsToRemove);
-				return result;
+				_bufferSemaphore.Release(itemsToRemove);
+				var bufferSize = _buffer.Count;
 			}
+			return result;
 		}
 	}
 
@@ -145,10 +171,11 @@ namespace Peeveen.Utils.Async {
 		/// Converts an IAsyncEnumerable to a multiplexing enumerable.
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
-		/// <param name="source"></param>
-		/// <param name="consumerCount"></param>
+		/// <param name="source">Source enumerable to wrap.</param>
+		/// <param name="consumerCount">Number of consumers.</param>
+		/// <param name="maxBufferSize">Maximum buffer size. If less than 1, buffer size will be limitless.</param>
 		/// <returns></returns>
-		public static MultiplexingAsyncEnumerable<T> ToMultiplexingAsyncEnumerable<T>(this IAsyncEnumerable<T> source, int consumerCount) =>
-			new MultiplexingAsyncEnumerable<T>(source, consumerCount);
+		public static MultiplexingAsyncEnumerable<T> ToMultiplexingAsyncEnumerable<T>(this IAsyncEnumerable<T> source, int consumerCount, int maxBufferSize = 0) =>
+			new MultiplexingAsyncEnumerable<T>(source, consumerCount, maxBufferSize);
 	}
 }
