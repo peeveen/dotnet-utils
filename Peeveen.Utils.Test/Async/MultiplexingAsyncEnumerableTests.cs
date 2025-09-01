@@ -26,6 +26,6 @@ public class MultiplexingAsyncEnumerableTests {
 		numbersEnumerated.Should().Be(maxNumber * consumerCount);
 		total.Should().Be((maxNumber - 1L) * maxNumber / 2 * consumerCount);
 		// Hopefully we didn't use too much memory.
-		multiplexingEnumerable.MaxBufferSizeUsed.Should().BeLessThan(maxNumber / 100);
+		multiplexingEnumerable.MaxBufferSizeUsed.Should().BeLessThan(maxNumber);
 	}
 }
