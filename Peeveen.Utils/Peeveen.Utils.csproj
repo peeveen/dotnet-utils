@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <!-- This will force moaning about undocumented public items -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>moderate</NuGetAuditLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <AssemblyTitle>Peeveen Utils</AssemblyTitle>
+  </PropertyGroup>
+
+  <!-- Allow certain warnings in Debug builds -->
+  <PropertyGroup Condition="$(Configuration) == 'Debug'">
+    <WarningsNotAsErrors>CS1591;S125;CMS0002</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <!-- References -->
+  <ItemGroup>
+    <PackageReference Include="Nito.AsyncEx" Version="5.1.2" />
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+    <PackageReference Include="System.Text.Json" Version="9.0.8" />
+  </ItemGroup>
+
+  <!-- NuGet package settings -->
+  <PropertyGroup>
+    <PackageIcon>packageIcon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>#TODO# Edit the package description in the project file.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include=".nuget/packageIcon.png" Pack="true" PackagePath="\" />
+    <None Include="../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

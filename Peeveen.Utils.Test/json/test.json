@@ -1,0 +1,178 @@
+{
+	"property1": "something",
+	"dynamicData": {
+		"date": "2023-04-09",
+		"dateTime": "2023-04-09T01:23:45",
+		"dateTimeOffset": "2023-04-09T01:23:45+02:00",
+		"timespan": "00:02:23.453983",
+		"booleanTrueTest": true,
+		"booleanFalseTest": false,
+		"longTest": 2147483648,
+		"integerTest": 1234,
+		"floatTest": 123.4,
+		"stringTest": "abcd",
+		"numericStringTest": "100",
+		"nullTest": null,
+		"integerArrayTest": [1, 2, 3, 4],
+		"floatArrayTest": [0.0, 1.1, 2.2, 3.3, 4.4, 5.5],
+		"stringArrayTest": ["a", "b", "c", "d"],
+		"booleanArrayTest": [true, false, true, false],
+		"objectArrayTest": [
+			{ "property": "thing1" },
+			{ "property": "thing2" },
+			{ "property": "thing3" },
+			{ "property": "thing4" }
+		],
+		"integerArrayWithNullsTest": [1, 2, null, 3, 4],
+		"floatArrayWithNullsTest": [0.0, 1.1, 2.2, null, 3.3, 4.4, 5.5],
+		"stringArrayWithNullsTest": ["a", "b", null, "c", "d"],
+		"booleanArrayWithNullsTest": [true, false, null, true, false],
+		"objectArrayWithNullsTest": [
+			{ "property": "thing1" },
+			{ "property": "thing2" },
+			null,
+			{ "property": "thing3" },
+			{ "property": "thing4" }
+		],
+		"nestedArrayTest": [
+			[1, 2, 3, 4],
+			[1.1, 2.2, 3.3, 4.4, 5.5],
+			["a", "b", "c", "d"],
+			[true, false, true, false],
+			[
+				{ "property": "thing1" },
+				{ "property": "thing2" },
+				{ "property": "thing3" },
+				{ "property": "thing4" }
+			],
+			[1, 2, null, 3, 4],
+			[1.1, 2.2, null, 3.3, 4.4, 5.5],
+			["a", "b", null, "c", "d"],
+			[true, false, null, true, false],
+			[
+				{ "property": "thing1" },
+				{ "property": "thing2" },
+				null,
+				{ "property": "thing3" },
+				{ "property": "thing4" }
+			]
+		],
+		"objectTest": {
+			"booleanTrueTest": true,
+			"booleanFalseTest": false,
+			"integerTest": 1234,
+			"longTest": 2147483648,
+			"floatTest": 123.4,
+			"stringTest": "abcd",
+			"numericStringTest": "100",
+			"nullTest": null,
+			"date": "2023-04-09",
+			"dateTime": "2023-04-09T01:23:45",
+			"dateTimeOffset": "2023-04-09T01:23:45+02:00",
+			"timespan": "00:02:23.453983",
+			"integerArrayTest": [1, 2, 3, 4],
+			"floatArrayTest": [0.0, 1.1, 2.2, 3.3, 4.4, 5.5],
+			"stringArrayTest": ["a", "b", "c", "d"],
+			"booleanArrayTest": [true, false, true, false],
+			"objectArrayTest": [
+				{ "property": "thing1" },
+				{ "property": "thing2" },
+				{ "property": "thing3" },
+				{ "property": "thing4" }
+			],
+			"integerArrayWithNullsTest": [1, 2, null, 3, 4],
+			"floatArrayWithNullsTest": [0.0, 1.1, 2.2, null, 3.3, 4.4, 5.5],
+			"stringArrayWithNullsTest": ["a", "b", null, "c", "d"],
+			"booleanArrayWithNullsTest": [true, false, null, true, false],
+			"objectArrayWithNullsTest": [
+				{ "property": "thing1" },
+				{ "property": "thing2" },
+				null,
+				{ "property": "thing3" },
+				{ "property": "thing4" }
+			],
+			"nestedArrayTest": [
+				[1, 2, 3, 4],
+				[1.1, 2.2, 3.3, 4.4, 5.5],
+				["a", "b", "c", "d"],
+				[true, false, true, false],
+				[
+					{ "property": "thing1" },
+					{ "property": "thing2" },
+					{ "property": "thing3" },
+					{ "property": "thing4" }
+				],
+				[1, 2, null, 3, 4],
+				[1.1, 2.2, null, 3.3, 4.4, 5.5],
+				["a", "b", null, "c", "d"],
+				[true, false, null, true, false],
+				[
+					{ "property": "thing1" },
+					{ "property": "thing2" },
+					null,
+					{ "property": "thing3" },
+					{ "property": "thing4" }
+				]
+			],
+			"nestedObjectTest": {
+				"booleanTrueTest": true,
+				"booleanFalseTest": false,
+				"integerTest": 1234,
+				"longTest": 2147483648,
+				"floatTest": 123.4,
+				"stringTest": "abcd",
+				"numericStringTest": "100",
+				"nullTest": null,
+				"date": "2023-04-09",
+				"dateTime": "2023-04-09T01:23:45",
+				"dateTimeOffset": "2023-04-09T01:23:45+02:00",
+				"timespan": "00:02:23.453983",
+				"integerArrayTest": [1, 2, 3, 4],
+				"floatArrayTest": [0.0, 1.1, 2.2, 3.3, 4.4, 5.5],
+				"stringArrayTest": ["a", "b", "c", "d"],
+				"booleanArrayTest": [true, false, true, false],
+				"objectArrayTest": [
+					{ "property": "thing1" },
+					{ "property": "thing2" },
+					{ "property": "thing3" },
+					{ "property": "thing4" }
+				],
+				"integerArrayWithNullsTest": [1, 2, null, 3, 4],
+				"floatArrayWithNullsTest": [0.0, 1.1, 2.2, null, 3.3, 4.4, 5.5],
+				"stringArrayWithNullsTest": ["a", "b", null, "c", "d"],
+				"booleanArrayWithNullsTest": [true, false, null, true, false],
+				"objectArrayWithNullsTest": [
+					{ "property": "thing1" },
+					{ "property": "thing2" },
+					null,
+					{ "property": "thing3" },
+					{ "property": "thing4" }
+				],
+				"nestedArrayTest": [
+					[1, 2, 3, 4],
+					[0.0, 1.1, 2.2, 3.3, 4.4, 5.5],
+					["a", "b", "c", "d"],
+					[true, false, true, false],
+					[
+						{ "property": "thing1" },
+						{ "property": "thing2" },
+						{ "property": "thing3" },
+						{ "property": "thing4" }
+					],
+					[1, 2, null, 3, 4],
+					[1.1, 2.2, null, 3.3, 4.4, 5.5],
+					["a", "b", null, "c", "d"],
+					[true, false, null, true, false],
+					[
+						{ "property": "thing1" },
+						{ "property": "thing2" },
+						null,
+						{ "property": "thing3" },
+						{ "property": "thing4" }
+					]
+				]
+			}
+		}
+	},
+	"property2": "somethingElse"
+}

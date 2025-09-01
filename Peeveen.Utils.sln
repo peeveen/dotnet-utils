@@ -1,0 +1,31 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.2.32616.157
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Peeveen.Utils", "Peeveen.Utils\Peeveen.Utils.csproj", "{3BAF012E-6410-47E7-94DC-856D9DD44895}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Peeveen.Utils.Test", "Peeveen.Utils.Test\Peeveen.Utils.Test.csproj", "{720E8D61-04D4-4426-8649-0F93379A398D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3BAF012E-6410-47E7-94DC-856D9DD44895}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3BAF012E-6410-47E7-94DC-856D9DD44895}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3BAF012E-6410-47E7-94DC-856D9DD44895}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3BAF012E-6410-47E7-94DC-856D9DD44895}.Release|Any CPU.Build.0 = Release|Any CPU
+		{720E8D61-04D4-4426-8649-0F93379A398D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{720E8D61-04D4-4426-8649-0F93379A398D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{720E8D61-04D4-4426-8649-0F93379A398D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{720E8D61-04D4-4426-8649-0F93379A398D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {65A1B732-660A-4BFA-8525-027261E4191A}
+	EndGlobalSection
+EndGlobal
