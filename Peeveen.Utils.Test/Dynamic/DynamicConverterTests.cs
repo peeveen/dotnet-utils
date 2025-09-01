@@ -78,8 +78,8 @@ public class DynamicConverterTests {
 		(result.numericStringTest as string).Should().Be("100");
 		(result.nullTest as object).Should().BeNull();
 		((DateTime)result.date).Should().Be(new DateTime(2023, 04, 09));
-		((DateTime)result.dateTime).Should().Be(new DateTime(2023, 04, 09, 01, 23, 45));
-		((DateTimeOffset)result.dateTimeOffset).Should().Be(new DateTime(2023, 04, 09, 00, 23, 45));
+		((DateTime)result.dateTime).Should().Be(new DateTime(2023, 04, 09, 01, 23, 45, DateTimeKind.Utc));
+		((DateTimeOffset)result.dateTimeOffset).Should().Be(new DateTime(2023, 04, 08, 23, 23, 45, DateTimeKind.Utc));
 		((TimeSpan)result.timespan).Should().Be(new TimeSpan(0, 0, 2, 23, 453, 983));
 		var x = Equals(1, result.integerArrayTest[0]);
 		AssertArraysMatch(new object[] { 1, 2, 3, 4 }, result.integerArrayTest);
