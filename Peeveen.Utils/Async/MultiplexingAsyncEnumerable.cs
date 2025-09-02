@@ -22,7 +22,7 @@ namespace Peeveen.Utils.Async {
 		private readonly IAsyncEnumerable<T> _source;
 		internal PersistingEnumerator<T> _persistingEnumerator;
 		private readonly object _enumeratorLock = new object();
-		private int _enumerations;
+		private int _consumerIndex = -1;
 
 		/// <summary>
 		/// Constructor.
@@ -48,14 +48,16 @@ namespace Peeveen.Utils.Async {
 
 		/// <inheritdoc/>
 		public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default) {
-			var thisEnumeration = _enumerations++;
-			if (_enumerations > _consumerCount)
-				throw new InvalidOperationException($"This {nameof(MultiplexingAsyncEnumerable<T>)} supports only {_consumerCount} enumerations, but {nameof(GetAsyncEnumerator)} has now been called {_enumerations} times.");
+			var consumerIndex = Interlocked.Increment(ref _consumerIndex);
+			if (_consumerIndex >= _consumerCount)
+				throw new InvalidOperationException($"This {nameof(MultiplexingAsyncEnumerable<T>)} supports only {_consumerCount} enumerations, but {nameof(GetAsyncEnumerator)} has now been called {_consumerIndex + 1} times.");
 			lock (_enumeratorLock) {
 				if (_persistingEnumerator == null)
 					_persistingEnumerator = new PersistingEnumerator<T>(_source.GetAsyncEnumerator(cancellationToken), _consumerCount, _maxBufferSize);
+				// Probably overkill to use Interlocked here, but ...
+				Interlocked.Increment(ref _persistingEnumerator._usages);
 			}
-			return new MultiplexingAsyncEnumerator<T>(_persistingEnumerator, thisEnumeration);
+			return new MultiplexingAsyncEnumerator<T>(_persistingEnumerator, consumerIndex);
 		}
 	}
 
@@ -84,8 +86,16 @@ namespace Peeveen.Utils.Async {
 		private readonly AsyncSemaphore _bufferSemaphore;
 		// Lock for synchronizing access to the buffer.
 		private readonly AsyncLock _bufferLock = new AsyncLock();
+		// Number of times that this enumerator has been used.
+		// It is shared across multiple instances of MultiplexingAsyncEnumerator, so when
+		// Dispose() is called, it should NOT dispose until there are no active usages.
+		internal int _usages;
+		private CancellationToken testCancellationToken;
 
 		internal PersistingEnumerator(IAsyncEnumerator<T> source, int consumerCount, int maxBufferSize) {
+			var cancellationTokenSource = new CancellationTokenSource();
+			cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(10));
+			testCancellationToken = cancellationTokenSource.Token;
 			if (consumerCount < 1)
 				throw new ArgumentException("There must be at least one consumer.", nameof(consumerCount));
 			// Some explanation required here.
@@ -124,14 +134,18 @@ namespace Peeveen.Utils.Async {
 		// If there is only one consumer, there is no need for any of our fancy-schmancy stuff.
 		public T GetCurrent(int consumerNumber) => _singleConsumer ? _source.Current : _currents[consumerNumber];
 
-		public ValueTask DisposeAsync() => _source.DisposeAsync();
+		public async ValueTask DisposeAsync() {
+			// Only dispose once the last enumerator says so.
+			if (Interlocked.Decrement(ref _usages) == 0)
+				await _source.DisposeAsync();
+		}
 
 		public async ValueTask<bool> MoveNextAsync(int consumerNumber) {
 			// If there is only one consumer, there is no need for any of our fancy-schmancy stuff.
 			if (_singleConsumer)
 				return await _source.MoveNextAsync();
 			bool addToBuffer;
-			int newConsumerIndex = ++_consumerIndices[consumerNumber];
+			var consumerIndex = ++_consumerIndices[consumerNumber];
 			// Any buffer access (including examining length, etc) should be done
 			// within this lock.
 			// Note that _bufferStartIndex is a value that can change when the
@@ -139,7 +153,7 @@ namespace Peeveen.Utils.Async {
 			// reverence.
 			using (await _bufferLock.LockAsync()) {
 				// Figure out the actual buffer index that we want to access.
-				var bufferIndex = newConsumerIndex - _bufferStartIndex;
+				var bufferIndex = consumerIndex - _bufferStartIndex;
 				// Do we need to add more data to the buffer?
 				// Or do we already have enough?
 				addToBuffer = bufferIndex >= _buffer.Count;
@@ -151,18 +165,22 @@ namespace Peeveen.Utils.Async {
 			if (addToBuffer) {
 				// Okay, we need to add to the buffer.
 				// Grab the "add to buffer" semaphore.
-				if (_bufferSemaphore != null)
-					await _bufferSemaphore.WaitAsync();
+				try {
+					if (_bufferSemaphore != null)
+						await _bufferSemaphore.WaitAsync(testCancellationToken);
+				} catch (Exception e) {
+					Console.WriteLine(e);
+				}
 				// Okay, we got it. Now, as with all buffer access, enter the lock.
 				using (await _bufferLock.LockAsync()) {
 					// By the time we have got the semaphore and the buffer lock, another
 					// consumer might have made it through this section and added an item to
 					// the buffer. So let's recalculate buffer index in case start index has changed.
-					var recalculatedConsumerIndex = newConsumerIndex - _bufferStartIndex;
+					var recalculatedBufferIndex = consumerIndex - _bufferStartIndex;
 					// Do we now have enough data in the buffer?
-					if (result = recalculatedConsumerIndex < _buffer.Count) {
+					if (result = recalculatedBufferIndex < _buffer.Count) {
 						// Yes we do! Job done.
-						_currents[consumerNumber] = _buffer[recalculatedConsumerIndex];
+						_currents[consumerNumber] = _buffer[recalculatedBufferIndex];
 						// Be sure to release the semaphore we acquired on the way in.
 						// It turned out that we didn't need to add to the buffer, so we
 						// acquired it "in error".
@@ -199,7 +217,7 @@ namespace Peeveen.Utils.Async {
 				// For every item removed, we can release the semaphore a bit.
 				_bufferSemaphore?.Release(itemsToRemove);
 			}
-			// The final result will be True if there is new data available in _currents,
+			// The final result will be true if there is new data available in _currents,
 			// or false if the data has been exhausted.
 			return result;
 		}
