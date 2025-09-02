@@ -156,7 +156,7 @@ namespace Peeveen.Utils.Async {
 				// Okay, we got it. Now, as with all buffer access, enter the lock.
 				using (await _bufferLock.LockAsync()) {
 					// By the time we have got the semaphore and the buffer lock, another
-					// consumer might have made it into this section and added an item to
+					// consumer might have made it through this section and added an item to
 					// the buffer. So let's recalculate buffer index in case start index has changed.
 					var recalculatedConsumerIndex = newConsumerIndex - _bufferStartIndex;
 					// Do we now have enough data in the buffer?
