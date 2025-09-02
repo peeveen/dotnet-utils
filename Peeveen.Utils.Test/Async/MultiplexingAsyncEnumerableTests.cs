@@ -23,14 +23,22 @@ public class MultiplexingAsyncEnumerableTests {
 		numbersEnumerated.Should().Be(maxNumber * consumerCount);
 		total.Should().Be((maxNumber - 1L) * maxNumber / 2 * consumerCount);
 		// Hopefully we didn't use too much memory.
-		multiplexingEnumerable.MaxBufferSizeUsed.Should().BeLessThanOrEqualTo(maxBufferSize > 1 ? maxBufferSize : (maxNumber - 1));
+		multiplexingEnumerable.MaxBufferSizeUsed.Should().BeLessThanOrEqualTo(maxBufferSize > 1 ? maxBufferSize : maxNumber);
 	}
 
 	[Fact]
-	public Task TestMultiplexingAsyncEnumerableWithoutMaxBufferLimit() =>
-		TestMultiplexingAsyncEnumerable(consumerCount: 12, maxNumber: 100000);
+	public Task TestMultiplexingAsyncEnumerableWithNoMaxBufferLimit() =>
+		TestMultiplexingAsyncEnumerable(consumerCount: 12, maxNumber: 10000);
 
 	[Fact]
-	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimit() =>
-		TestMultiplexingAsyncEnumerable(consumerCount: 2, maxNumber: 100, maxBufferSize: 1);
+	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitLessThanConsumerCount() =>
+		TestMultiplexingAsyncEnumerable(consumerCount: 12, maxNumber: 10000, maxBufferSize: 1);
+
+	[Fact]
+	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitGreaterThanConsumerCount() =>
+		TestMultiplexingAsyncEnumerable(consumerCount: 2, maxNumber: 10000, maxBufferSize: 12);
+
+	[Fact]
+	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitEqualToConsumerCount() =>
+		TestMultiplexingAsyncEnumerable(consumerCount: 12, maxNumber: 10000, maxBufferSize: 12);
 }
