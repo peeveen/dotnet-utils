@@ -65,7 +65,8 @@ namespace Peeveen.Utils.Async {
 		// The wrapped enumerator.
 		private readonly IAsyncEnumerator<T> _source;
 		// The buffer containing items obtained from the wrapped enumerator.
-		private readonly List<T> _buffer = new List<T>();
+		private readonly List<Task<(bool, T)>> _buffer = new List<Task<(bool, T)>>();
+		private readonly AsyncSemaphore _bufferSemaphore;
 		// We track the position of each consumer in this array.
 		private readonly int[] _consumerIndices;
 		// We track the current item for each consumer in this array.
@@ -81,44 +82,17 @@ namespace Peeveen.Utils.Async {
 		internal int _itemsEnumerated;
 		// This will be true if there is only one consumer.
 		private readonly bool _singleConsumer;
-		// Semaphore for controlling "add" access to the buffer.
-		// This is used to limit the number of items that can be added to the buffer.
-		private readonly AsyncSemaphore _bufferSemaphore;
 		// Lock for synchronizing access to the buffer.
 		private readonly AsyncLock _bufferLock = new AsyncLock();
 		// Number of times that this enumerator has been used.
 		// It is shared across multiple instances of MultiplexingAsyncEnumerator, so when
 		// Dispose() is called, it should NOT dispose until there are no active usages.
 		internal int _usages;
-		private CancellationToken testCancellationToken;
 
 		internal PersistingEnumerator(IAsyncEnumerator<T> source, int consumerCount, int maxBufferSize) {
-			var cancellationTokenSource = new CancellationTokenSource();
-			cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(10));
-			testCancellationToken = cancellationTokenSource.Token;
 			if (consumerCount < 1)
 				throw new ArgumentException("There must be at least one consumer.", nameof(consumerCount));
-			// Some explanation required here.
-			// The buffer semaphore is used to implement the maxBufferSize functionality.
-			// We don't want to allow more than maxBufferSize items to be buffered at once.
-			// So you would think that using maxBufferSize as the constructor value for the semaphore
-			// would make sense.
-			// However, this would cause deadlock if there were more consumers than the buffer size,
-			// and all consumers tried to acquire the semaphore at the same time.
-			// In the MoveNextAsync function (in PersistingEnumerator), once the semaphore has been
-			// acquired, we perform a quick initial check to see if another consumer added to the buffer
-			// while the active consumer was waiting for the semaphore (and the buffer lock). If this
-			// has happened, the active consumer simply takes the added value from the buffer and
-			// immediately releases the acquired semaphore.
-			// So the additional (consumerCount - maxBufferSize) value is added to the semaphore count
-			// to allow for the above scenario to play out (and if there are fewer consumers than the max
-			// buffer size, we use zero).
-			// Even though the semaphore allows access for more than maxBufferSize consumers, the
-			// additional buffer lock and checking-logic (described above) ensures that no more than
-			// maxBufferSize items are in the buffer at any time.
-			var clamourBuffer = Math.Max(0, consumerCount - maxBufferSize);
-			_bufferSemaphore = maxBufferSize > 1 ? new AsyncSemaphore(maxBufferSize + clamourBuffer) : null;
-
+			_bufferSemaphore = maxBufferSize > 0 ? new AsyncSemaphore(maxBufferSize) : null;
 			_singleConsumer = consumerCount == 1;
 			_source = source;
 
@@ -140,72 +114,35 @@ namespace Peeveen.Utils.Async {
 				await _source.DisposeAsync();
 		}
 
+		private async Task<(bool, T)> GetNextItemAsync() {
+			if (_bufferSemaphore != null)
+				await _bufferSemaphore.WaitAsync();
+			// Okay, we got it. Now, as with all buffer access, enter the lock.
+			// OK, we DEFINITELY need to add to the buffer.
+			// Move the wrapped enumerator to the next index.
+			if (_hasMoreData = _hasMoreData && await _source.MoveNextAsync()) {
+				// There IS more data in the wrapped enumerator.
+				// So grab it, and add it to our buffer.
+				// Note that we DON'T release the semaphore here, as we ARE adding
+				// to the buffer, so it is CORRECT that the semaphore count is reduced.
+				Interlocked.Increment(ref _itemsEnumerated);
+				return (true, _source.Current);
+			}
+			return (false, default);
+		}
+
 		public async ValueTask<bool> MoveNextAsync(int consumerNumber) {
 			// If there is only one consumer, there is no need for any of our fancy-schmancy stuff.
 			if (_singleConsumer)
 				return await _source.MoveNextAsync();
-			bool addToBuffer;
 			var consumerIndex = ++_consumerIndices[consumerNumber];
 			// Any buffer access (including examining length, etc) should be done
 			// within this lock.
 			// Note that _bufferStartIndex is a value that can change when the
 			// buffer is being modified, so we should treat that with the same
 			// reverence.
-			using (await _bufferLock.LockAsync()) {
-				// Figure out the actual buffer index that we want to access.
-				var bufferIndex = consumerIndex - _bufferStartIndex;
-				// Do we need to add more data to the buffer?
-				// Or do we already have enough?
-				addToBuffer = bufferIndex >= _buffer.Count;
-				// If there is enough data in the buffer, then great! Job done.
-				if (!addToBuffer)
-					_currents[consumerNumber] = _buffer[bufferIndex];
-			}
-			var result = !addToBuffer;
-			if (addToBuffer) {
-				// Okay, we need to add to the buffer.
-				// Grab the "add to buffer" semaphore.
-				try {
-					if (_bufferSemaphore != null)
-						await _bufferSemaphore.WaitAsync(testCancellationToken);
-				} catch (Exception e) {
-					Console.WriteLine(e);
-				}
-				// Okay, we got it. Now, as with all buffer access, enter the lock.
-				using (await _bufferLock.LockAsync()) {
-					// By the time we have got the semaphore and the buffer lock, another
-					// consumer might have made it through this section and added an item to
-					// the buffer. So let's recalculate buffer index in case start index has changed.
-					var recalculatedBufferIndex = consumerIndex - _bufferStartIndex;
-					// Do we now have enough data in the buffer?
-					if (result = recalculatedBufferIndex < _buffer.Count) {
-						// Yes we do! Job done.
-						_currents[consumerNumber] = _buffer[recalculatedBufferIndex];
-						// Be sure to release the semaphore we acquired on the way in.
-						// It turned out that we didn't need to add to the buffer, so we
-						// acquired it "in error".
-						_bufferSemaphore?.Release();
-					} else {
-						// OK, we DEFINITELY need to add to the buffer.
-						// Move the wrapped enumerator to the next index.
-						if (result = _hasMoreData = _hasMoreData && await _source.MoveNextAsync()) {
-							// There IS more data in the wrapped enumerator.
-							// So grab it, and add it to our buffer.
-							// Note that we DON'T release the semaphore here, as we ARE adding
-							// to the buffer, so it is CORRECT that the semaphore count is reduced.
-							var current = _source.Current;
-							_currents[consumerNumber] = current;
-							_buffer.Add(current);
-							_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, _buffer.Count);
-							++_itemsEnumerated;
-						} else
-							// The wrapped enumerator is empty, so we can't add to the buffer.
-							// Release the semaphore we acquired on the way in.
-							_bufferSemaphore?.Release();
-					}
-				}
-			}
-			// After all that, clean up the buffer.
+			bool enoughData;
+			Task<(bool, T)> resultTask;
 			using (await _bufferLock.LockAsync()) {
 				// Check how far each consumer has gone.
 				// If they're all past the start of the buffer, we can
@@ -214,12 +151,25 @@ namespace Peeveen.Utils.Async {
 				var itemsToRemove = minIndex - _bufferStartIndex;
 				_bufferStartIndex = minIndex;
 				_buffer.RemoveRange(0, itemsToRemove);
-				// For every item removed, we can release the semaphore a bit.
 				_bufferSemaphore?.Release(itemsToRemove);
+
+				// Figure out the actual buffer index that we want to access.
+				var bufferIndex = consumerIndex - _bufferStartIndex;
+				// Do we need to add more data to the buffer?
+				// Or do we already have enough?
+				// Don't add if another consumer has already started adding.
+				enoughData = bufferIndex < _buffer.Count;
+				if (!enoughData) {
+					_buffer.Add(GetNextItemAsync());
+					_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, _buffer.Count);
+				}
+				resultTask = _buffer[bufferIndex];
 			}
+			var result = await resultTask;
+			_currents[consumerNumber] = result.Item2;
 			// The final result will be true if there is new data available in _currents,
 			// or false if the data has been exhausted.
-			return result;
+			return result.Item1;
 		}
 	}
 
