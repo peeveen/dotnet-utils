@@ -84,11 +84,12 @@ namespace Peeveen.Utils.Dynamic {
 				var expandoDict = (IDictionary<string, object>)obj;
 				foreach (var kvp in expandoDict)
 					yield return new DynamicPropertyInfo(kvp.Key, kvp.Value.GetType());
+			} else {
+				var type = obj.GetType();
+				var properties = type.GetProperties();
+				foreach (var prop in properties)
+					yield return new DynamicPropertyInfo(prop.Name, prop.PropertyType);
 			}
-			var type = obj.GetType();
-			var properties = type.GetProperties();
-			foreach (var prop in properties)
-				yield return new DynamicPropertyInfo(prop.Name, prop.PropertyType);
 		}
 	}
 }
