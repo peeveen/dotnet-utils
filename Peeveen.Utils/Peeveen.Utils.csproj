@@ -6,6 +6,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <NuGetAuditMode>all</NuGetAuditMode>
+		<Version>1.0.0</Version>
     <NuGetAuditLevel>moderate</NuGetAuditLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
