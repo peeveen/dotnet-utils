@@ -66,6 +66,7 @@ namespace Peeveen.Utils.Async {
 		private readonly IAsyncEnumerator<T> _source;
 		// The buffer containing items obtained from the wrapped enumerator.
 		private readonly List<Task<(bool, T)>> _buffer = new List<Task<(bool, T)>>();
+		// Semaphore that implements the "max buffer size" functionality.
 		private readonly AsyncSemaphore _bufferSemaphore;
 		// We track the position of each consumer in this array.
 		private readonly int[] _consumerIndices;
@@ -115,19 +116,21 @@ namespace Peeveen.Utils.Async {
 		}
 
 		private async Task<(bool, T)> GetNextItemAsync() {
+			// Limit the number of buffer-add tasks to the maxBufferSize.
+			// (actually will be one more than that, but nobody's REALLY counting)
 			if (_bufferSemaphore != null)
 				await _bufferSemaphore.WaitAsync();
-			// Okay, we got it. Now, as with all buffer access, enter the lock.
-			// OK, we DEFINITELY need to add to the buffer.
-			// Move the wrapped enumerator to the next index.
+			// See if the wrapped enumerator has more data.
 			if (_hasMoreData = _hasMoreData && await _source.MoveNextAsync()) {
 				// There IS more data in the wrapped enumerator.
-				// So grab it, and add it to our buffer.
+				// So grab it, and return it.
 				// Note that we DON'T release the semaphore here, as we ARE adding
 				// to the buffer, so it is CORRECT that the semaphore count is reduced.
 				Interlocked.Increment(ref _itemsEnumerated);
 				return (true, _source.Current);
 			}
+			// There was no more data. Best release the semaphore that we acquired.
+			_bufferSemaphore?.Release();
 			return (false, default);
 		}
 
@@ -141,9 +144,10 @@ namespace Peeveen.Utils.Async {
 			// Note that _bufferStartIndex is a value that can change when the
 			// buffer is being modified, so we should treat that with the same
 			// reverence.
-			bool enoughData;
 			Task<(bool, T)> resultTask;
 			using (await _bufferLock.LockAsync()) {
+				// First, tidy up the buffer, deallocating items that every
+				// consumer has consumed.
 				// Check how far each consumer has gone.
 				// If they're all past the start of the buffer, we can
 				// remove items from the start.
@@ -157,18 +161,25 @@ namespace Peeveen.Utils.Async {
 				var bufferIndex = consumerIndex - _bufferStartIndex;
 				// Do we need to add more data to the buffer?
 				// Or do we already have enough?
-				// Don't add if another consumer has already started adding.
-				enoughData = bufferIndex < _buffer.Count;
+				var enoughData = bufferIndex < _buffer.Count;
 				if (!enoughData) {
+					// Not enough data. Add a task that will retrieve the next
+					// item from the wrapped enumerator (if available).
 					_buffer.Add(GetNextItemAsync());
 					_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, _buffer.Count);
 				}
 				resultTask = _buffer[bufferIndex];
 			}
+			// Outside the lock now, we can await the task.
+			// (If we awaiting INSIDE the lock, the semaphore wait could lock,
+			// and we'd be in DEADLOCK).
 			var result = await resultTask;
+			// Each task returns a tuple: (bool, T)
+			// Boolean value indicates whether there was more data.
+			// Typed value is the data item, so we can set it in the _currents array.
+			// (If the bool is false, the T will be "default")
 			_currents[consumerNumber] = result.Item2;
-			// The final result will be true if there is new data available in _currents,
-			// or false if the data has been exhausted.
+			// Return the "has more data" value, as the interface demands.
 			return result.Item1;
 		}
 	}
