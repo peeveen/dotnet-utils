@@ -148,7 +148,7 @@ namespace Peeveen.Utils.Async {
 					_currents[consumerNumber] = _buffer[bufferIndex];
 			}
 			var result = !addToBuffer;
-			if (addToBuffer && _hasMoreData) {
+			if (addToBuffer) {
 				// Okay, we need to add to the buffer.
 				// Grab the "add to buffer" semaphore.
 				if (_bufferSemaphore != null)
