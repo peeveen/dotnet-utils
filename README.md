@@ -39,6 +39,15 @@ var dynamicProperty = deserializedDynamicData.some._dynamic.property.somewhere;
 
 - Parameterized constructor to define behavior surrounding date detection and smaller numeric data types.
 
+## `DynamicUtilities`
+
+A static class with a few methods for working with `dynamic` data.
+
+- `EvaluateExpression()` allows for a string expression like `x.y.z[2].blah` to be evaluated against
+  a `dynamic` object.
+- `GetPropertyInfo()` will return an array of objects describing the top-level properties of a `dynamic`
+  object.
+
 ## `MultiplexingAsyncEnumerable`
 
 A wrapper around an `IAsyncEnumerable` to allow for it to be consumed by multiple consumers, _as long
