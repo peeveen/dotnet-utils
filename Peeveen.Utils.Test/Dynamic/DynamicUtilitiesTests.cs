@@ -28,6 +28,7 @@ namespace Peeveen.Utils.Test.Dynamic {
 			var arrayItem = (int)DynamicUtilities.EvaluateExpression<int>(obj, "Array[1]");
 			var arrayThingByIndex = (double)DynamicUtilities.EvaluateExpression<double>(obj, "Array[2][\"Thing\"]");
 			var arrayThing = (double)DynamicUtilities.EvaluateExpression<double>(obj, "Array[2].Thing");
+			var arrayThingUsingDotSyntax = (double)DynamicUtilities.EvaluateExpression<double>(obj, "Array.2.Thing");
 			var booleanValue = (bool)DynamicUtilities.EvaluateExpression<bool>(obj, "Bool");
 
 			name.Should().Be("John");
@@ -38,7 +39,51 @@ namespace Peeveen.Utils.Test.Dynamic {
 			arrayItem.Should().Be(2);
 			booleanValue.Should().BeTrue();
 			arrayThing.Should().Be(44.6);
+			arrayThingUsingDotSyntax.Should().Be(44.6);
 			arrayThingByIndex.Should().Be(44.6);
+		}
+
+		[Fact]
+		public void TestFlattening() {
+			dynamic obj = new {
+				Name = "John",
+				Age = 30,
+				Address = new {
+					City = "New York",
+					ZipCode = "10001"
+				},
+				Array = new dynamic[] { 1, 2, new int[]{ 3,4 }, new{
+				Thing = 44.6
+			} },
+				Bool = true
+			};
+
+			var flatIncludingCollections = DynamicUtilities.Flatten(obj, includeCollections: true);
+			var flatExcludingCollections = DynamicUtilities.Flatten(obj, includeCollections: false);
+			var expectedWithoutCollections = new Dictionary<string, object> {
+				{ "Name", "John" },
+				{ "Age", 30 },
+				{ "Address_City", "New York" },
+				{ "Address_ZipCode", "10001" },
+				{ "Bool", true }
+			};
+			var expectedWithCollections = expectedWithoutCollections.Concat(new Dictionary<string, object> {
+				{ "Array_0", 1 },
+				{ "Array_1", 2 },
+				{ "Array_2_0", 3 },
+				{ "Array_2_1", 4 },
+				{ "Array_3_Thing", 44.6 },
+			}).ToDictionary();
+			static void ValidateResult(dynamic result, Dictionary<string, object> expected) {
+				foreach (var kvp in expected) {
+					var dynamicDictionary = result as IDictionary<string, object?>;
+					dynamicDictionary.Should().NotBeNull();
+					dynamicDictionary.ContainsKey(kvp.Key).Should().BeTrue($"Key {kvp.Key} should be present");
+					dynamicDictionary[kvp.Key].Should().Be(kvp.Value, $"Value for key {kvp.Key} should match");
+				}
+			}
+			ValidateResult(flatIncludingCollections, expectedWithCollections);
+			ValidateResult(flatExcludingCollections, expectedWithoutCollections);
 		}
 	}
 }

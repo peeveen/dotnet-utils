@@ -47,22 +47,26 @@ A static class with a few methods for working with `dynamic` data.
   a `dynamic` object.
 - `GetPropertyInfo()` will return an array of objects describing the top-level properties of a `dynamic`
   object.
+- `Flatten()` will flatten all nested objects of a `dynamic` into top-level properties (optionally
+  including arrays/lists), with property names made from a combination of parent property names using
+  a custom separator.
 
 ## `MultiplexingAsyncEnumerable`
 
 A wrapper around an `IAsyncEnumerable` to allow for it to be consumed by multiple consumers, _as long
 as you know how many consumers there are_.
 
-Depending on the implementation of an `IAsyncEnumerable`, it may not support being enumerated multiple
-times (e.g. if it is reading directly from a network stream, or a database query). So if you want to
-provide the data to multiple consumers, your usual option is to first enumerate it to a concrete
-collection such as a `List`. This could be costly in terms of memory.
+Depending on the implementation of any given `IAsyncEnumerable`, it may not support being enumerated
+multiple times (e.g. if it is reading directly from a network stream, or a database query). So if you
+want to provide the data to multiple consumers, your usual option is to first enumerate it to a
+concrete collection such as a `List`. This could be costly in terms of memory if there is a very
+large amount of data being enumerated.
 
 This class uses a internal `List` buffer into which the enumerated elements are read, _but_:
 
 - An item is only added to the buffer when it is requested by a consumer that has already consumed
   all previously-buffered items.
 - Later consumers will received the buffered item(s).
-- Items are removed from the buffer once all consumers have consumed them.
+- Items are removed from the buffer as soon as all consumers have consumed them.
 - You can specify a maximum buffer limit to ensure that one consumer does not race ahead, filling
   the internal buffer with massive amounts of data and allocating large amounts of memory.
