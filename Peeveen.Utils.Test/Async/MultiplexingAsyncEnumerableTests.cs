@@ -15,8 +15,11 @@ public class MultiplexingAsyncEnumerableTests {
 			var tasks = Enumerable.Range(0, consumerCount).Select(n =>
 				Task.Run(async () => {
 					var count = 0;
+					var lastNumber = -1;
 					await foreach (var number in numbers) {
 						++count;
+						number.Should().Be(lastNumber + 1);
+						lastNumber = number;
 						Interlocked.Increment(ref numbersEnumerated);
 						Interlocked.Add(ref total, number);
 					}
