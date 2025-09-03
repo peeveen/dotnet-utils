@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Nito.AsyncEx;
 
 namespace Peeveen.Utils.Async {
 	/// <summary>
@@ -67,7 +66,7 @@ namespace Peeveen.Utils.Async {
 		// The buffer containing items obtained from the wrapped enumerator.
 		private readonly List<Task<(bool, T)>> _buffer = new List<Task<(bool, T)>>();
 		// Semaphore that implements the "max buffer size" functionality.
-		private readonly AsyncSemaphore _bufferSemaphore;
+		private readonly SemaphoreSlim _bufferSemaphore;
 		// We track the position of each consumer in this array.
 		private readonly int[] _consumerIndices;
 		// We track the current item for each consumer in this array.
@@ -84,7 +83,7 @@ namespace Peeveen.Utils.Async {
 		// This will be true if there is only one consumer.
 		private readonly bool _singleConsumer;
 		// Lock for synchronizing access to the buffer.
-		private readonly AsyncLock _bufferLock = new AsyncLock();
+		private readonly object _bufferLock = new object();
 		// Number of times that this enumerator has been used.
 		// It is shared across multiple instances of MultiplexingAsyncEnumerator, so when
 		// Dispose() is called, it should NOT dispose until there are no active usages.
@@ -93,7 +92,7 @@ namespace Peeveen.Utils.Async {
 		internal PersistingEnumerator(IAsyncEnumerator<T> source, int consumerCount, int maxBufferSize) {
 			if (consumerCount < 1)
 				throw new ArgumentException("There must be at least one consumer.", nameof(consumerCount));
-			_bufferSemaphore = maxBufferSize > 0 ? new AsyncSemaphore(maxBufferSize) : null;
+			_bufferSemaphore = maxBufferSize > 0 ? new SemaphoreSlim(maxBufferSize, maxBufferSize) : null;
 			_singleConsumer = consumerCount == 1;
 			_source = source;
 
@@ -116,8 +115,12 @@ namespace Peeveen.Utils.Async {
 		}
 
 		private async Task<(bool, T)> GetNextItemAsync() {
-			// Limit the number of buffer-add tasks to the maxBufferSize.
-			// (actually will be one more than that, but nobody's REALLY counting)
+			// The semaphore prevents us adding more than "maxBufferSize" items to the
+			// buffer.
+			// Since the buffer actually contains TASKS that return items, there may
+			// actually be one more than that (e.g. if the maxBufferSize is 10, and
+			// there are already 10 tasks in the buffer, the 11th task that we add
+			// will block at this WaitAsync until the semaphore is available).
 			if (_bufferSemaphore != null)
 				await _bufferSemaphore.WaitAsync();
 			// See if the wrapped enumerator has more data.
@@ -145,7 +148,7 @@ namespace Peeveen.Utils.Async {
 			// buffer is being modified, so we should treat that with the same
 			// reverence.
 			Task<(bool, T)> resultTask;
-			using (await _bufferLock.LockAsync()) {
+			lock (_bufferLock) {
 				// First, tidy up the buffer, deallocating items that every
 				// consumer has consumed.
 				// Check how far each consumer has gone.
@@ -155,7 +158,8 @@ namespace Peeveen.Utils.Async {
 				var itemsToRemove = minIndex - _bufferStartIndex;
 				_bufferStartIndex = minIndex;
 				_buffer.RemoveRange(0, itemsToRemove);
-				_bufferSemaphore?.Release(itemsToRemove);
+				if (itemsToRemove > 0)
+					_bufferSemaphore?.Release(itemsToRemove);
 
 				// Figure out the actual buffer index that we want to access.
 				var bufferIndex = consumerIndex - _bufferStartIndex;

@@ -28,7 +28,8 @@ public class MultiplexingAsyncEnumerableTests {
 			total.Should().Be((maxNumber - 1L) * maxNumber / 2 * consumerCount);
 			// Hopefully we didn't use too much memory.
 			// A bit of a cheat: the maximum buffer size used will always actually be one more than requested
-			// due to the "next item" task that is added to the buffer.
+			// due to the "next item" task that is added to the buffer (see GetNextItemAsync for a more
+			// detailed explanation).
 			// I doubt anyone will sue over that.
 			multiplexingEnumerable.MaxBufferSizeUsed.Should().BeLessThanOrEqualTo((maxBufferSize > 1 ? maxBufferSize : maxNumber) + 1);
 		}
