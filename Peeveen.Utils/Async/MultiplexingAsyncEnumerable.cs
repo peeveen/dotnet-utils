@@ -124,11 +124,19 @@ namespace Peeveen.Utils.Async {
 			if (_bufferSemaphore != null)
 				await _bufferSemaphore.WaitAsync();
 			// See if the wrapped enumerator has more data.
+			// We set a member variable indicating whether there is more data available
+			// so that we don't make further unnecessary calls to MoveNextAsync.
+			// Since this variable is shared between consumers, access would normally
+			// need to be protected with a lock, but this is a simple boolean that
+			// will, at some point, flip from false to true, but, importantly, never
+			// back again. So I *think* it should be okay.
 			if (_hasMoreData = _hasMoreData && await _source.MoveNextAsync()) {
 				// There IS more data in the wrapped enumerator.
 				// So grab it, and return it.
 				// Note that we DON'T release the semaphore here, as we ARE adding
 				// to the buffer, so it is CORRECT that the semaphore count is reduced.
+				// (It will be increased again once items are removed from the tail
+				// of the buffer).
 				Interlocked.Increment(ref _itemsEnumerated);
 				return (true, _source.Current);
 			}
@@ -147,7 +155,7 @@ namespace Peeveen.Utils.Async {
 			// Note that _bufferStartIndex is a value that can change when the
 			// buffer is being modified, so we should treat that with the same
 			// reverence.
-			Task<(bool, T)> resultTask;
+			Task<(bool moreDataAvailable, T item)> resultTask;
 			lock (_bufferLock) {
 				// First, tidy up the buffer, deallocating items that every
 				// consumer has consumed.
@@ -165,26 +173,33 @@ namespace Peeveen.Utils.Async {
 				var bufferIndex = consumerIndex - _bufferStartIndex;
 				// Do we need to add more data to the buffer?
 				// Or do we already have enough?
-				var enoughData = bufferIndex < _buffer.Count;
-				if (!enoughData) {
+				if (bufferIndex >= _buffer.Count) {
 					// Not enough data. Add a task that will retrieve the next
 					// item from the wrapped enumerator (if available).
 					_buffer.Add(GetNextItemAsync());
 					_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, _buffer.Count);
 				}
+				// There should now be enough. At any time, the bufferIndex is
+				// guaranteed to be, at most, one greater than the current
+				// buffer count.
+				// So by adding another (above), we should now be able to
+				// safely access the list.
 				resultTask = _buffer[bufferIndex];
 			}
 			// Outside the lock now, we can await the task.
-			// (If we awaiting INSIDE the lock, the semaphore wait could lock,
+			// (If we await INSIDE the lock, the semaphore wait could lock,
 			// and we'd be in DEADLOCK).
-			var result = await resultTask;
+			var (moreDataAvailable, item) = await resultTask;
 			// Each task returns a tuple: (bool, T)
-			// Boolean value indicates whether there was more data.
-			// Typed value is the data item, so we can set it in the _currents array.
-			// (If the bool is false, the T will be "default")
-			_currents[consumerNumber] = result.Item2;
+			// Boolean value indicates whether there was more data available in
+			// the wrapper enumerator.
+			// Second value is the data item, so we can set it in the _currents array.
+			// (If the bool is false, the T will be "default" ... it will do
+			// no harm to set it in the _currents array, as the caller should
+			// not care about the value if there was no more data).
+			_currents[consumerNumber] = item;
 			// Return the "has more data" value, as the interface demands.
-			return result.Item1;
+			return moreDataAvailable;
 		}
 	}
 
