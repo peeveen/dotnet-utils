@@ -36,16 +36,16 @@ namespace Peeveen.Utils.Test.Dynamic {
 			double arrayThingUsingDotSyntax = DynamicUtilities.EvaluateExpression<double>(DynamicTestObject, "Array.3.Thing");
 			bool booleanValue = DynamicUtilities.EvaluateExpression<bool>(DynamicTestObject, "Bool");
 
-			name.Should().Be("John");
-			age.Should().Be(30);
-			city.Should().Be("New York");
-			zipCode.Should().Be("10001");
-			zipCodeByIndex.Should().Be("10001");
-			arrayItem.Should().Be(2);
-			booleanValue.Should().BeTrue();
-			arrayThing.Should().Be(44.6);
-			arrayThingUsingDotSyntax.Should().Be(44.6);
-			arrayThingByIndex.Should().Be(44.6);
+			name.Should().Be(DynamicTestObject.Name);
+			age.Should().Be(DynamicTestObject.Age);
+			city.Should().Be(DynamicTestObject.Address.City);
+			zipCode.Should().Be(DynamicTestObject.Address.ZipCode);
+			zipCodeByIndex.Should().Be(DynamicTestObject.Address.ZipCode);
+			arrayItem.Should().Be(DynamicTestObject.Array[1]);
+			booleanValue.Should().Be(DynamicTestObject.Bool);
+			arrayThing.Should().Be(DynamicTestObject.Array[3].Thing);
+			arrayThingUsingDotSyntax.Should().Be(DynamicTestObject.Array[3].Thing);
+			arrayThingByIndex.Should().Be(DynamicTestObject.Array[3].Thing);
 		}
 
 		private static void TestFlattening(
@@ -54,15 +54,12 @@ namespace Peeveen.Utils.Test.Dynamic {
 			Dictionary<string, object> expectedResults
 		) {
 			var flat = DynamicUtilities.Flatten(objectToFlatten, arrayFlatteningBehavior: arrayBehavior);
-			static void ValidateResult(dynamic result, Dictionary<string, object> expected) {
-				foreach (var kvp in expected) {
-					var dynamicDictionary = result as IDictionary<string, object?>;
-					dynamicDictionary.Should().NotBeNull();
-					dynamicDictionary.ContainsKey(kvp.Key).Should().BeTrue($"Key {kvp.Key} should be present");
-					dynamicDictionary[kvp.Key].Should().Be(kvp.Value, $"Value for key {kvp.Key} should match");
-				}
+			foreach (var kvp in expectedResults) {
+				var dynamicDictionary = flat as IDictionary<string, object?>;
+				dynamicDictionary.Should().NotBeNull();
+				dynamicDictionary.ContainsKey(kvp.Key).Should().BeTrue($"Key {kvp.Key} should be present");
+				dynamicDictionary[kvp.Key].Should().Be(kvp.Value, $"Value for key {kvp.Key} should match");
 			}
-			ValidateResult(flat, expectedResults);
 		}
 
 		[Fact]
