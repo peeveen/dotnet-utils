@@ -168,11 +168,12 @@ namespace Peeveen.Utils.Async {
 			lock (_bufferLock) {
 				// First, tidy up the buffer, deallocating items that every
 				// consumer has consumed.
-				// Check how far each consumer has gone.
-				// If they're all past the start of the buffer, we can
-				// remove items from the start.
+				// We only do this once the buffer reaches a minimum size.
 				var bufferSize = _buffer.Count;
 				if (bufferSize >= _bufferCleanupTriggerSize) {
+					// Check how far each consumer has gone.
+					// If they're all past the start of the buffer, we can
+					// remove items from the start.
 					var minIndex = Math.Max(_consumerIndices.Min(), 0);
 					var itemsToRemove = minIndex - _bufferStartIndex;
 					_bufferStartIndex = minIndex;
