@@ -4,13 +4,13 @@ using Peeveen.Utils.Async;
 namespace Peeveen.Utils.Test.Async;
 
 public class MultiplexingAsyncEnumerableTests {
-	private static async Task TestMultiplexingAsyncEnumerable(int testRuns, int consumerCount, int maxNumber, int maxBufferSize = 0) {
+	private static async Task TestMultiplexingAsyncEnumerable(int testRuns, int consumerCount, int maxNumber, int maxBufferSize = 0, int bufferCleanupTriggerSize = 1) {
 		for (var f = 0; f < testRuns; ++f) {
 			var total = 0L;
 			var numbersEnumerated = 0;
 			var numbers = Enumerable.Range(0, maxNumber)
 				.ToAsyncEnumerable()
-				.ToMultiplexingAsyncEnumerable(consumerCount, maxBufferSize);
+				.ToMultiplexingAsyncEnumerable(consumerCount, maxBufferSize, bufferCleanupTriggerSize);
 			var multiplexingEnumerable = numbers;
 			var tasks = Enumerable.Range(0, consumerCount).Select(n =>
 				Task.Run(async () => {
@@ -40,17 +40,29 @@ public class MultiplexingAsyncEnumerableTests {
 
 	[Fact]
 	public Task TestMultiplexingAsyncEnumerableWithNoMaxBufferLimit() =>
-	TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 2, maxNumber: 10000);
+		TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 2, maxNumber: 10000);
 
 	[Fact]
 	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitLessThanConsumerCount() =>
-	TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 12, maxNumber: 10000, maxBufferSize: 1);
+		TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 12, maxNumber: 10000, maxBufferSize: 1);
 
 	[Fact]
 	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitGreaterThanConsumerCount() =>
-	TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 2, maxNumber: 10000, maxBufferSize: 10);
+		TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 2, maxNumber: 10000, maxBufferSize: 10);
 
 	[Fact]
 	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitEqualToConsumerCount() =>
-	TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 12, maxNumber: 10000, maxBufferSize: 12);
+		TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 12, maxNumber: 10000, maxBufferSize: 12);
+
+	[Fact]
+	public Task TestMultiplexingAsyncEnumerableWithNoMaxBufferLimitAndCleanupTriggerGreaterThan1() =>
+		TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 2, maxNumber: 10000, bufferCleanupTriggerSize: 20);
+
+	[Fact]
+	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitGreaterThanConsumerCountAndCleanupTriggerGreaterThan1() =>
+		TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 2, maxNumber: 10000, maxBufferSize: 10, bufferCleanupTriggerSize: 9);
+
+	[Fact]
+	public Task TestMultiplexingAsyncEnumerableWithMaxBufferLimitEqualToConsumerCountAndCleanupTriggerGreaterThan1() =>
+		TestMultiplexingAsyncEnumerable(testRuns: 40, consumerCount: 12, maxNumber: 10000, maxBufferSize: 12, bufferCleanupTriggerSize: 10);
 }

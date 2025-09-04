@@ -70,3 +70,6 @@ This class uses a internal `List` buffer into which the enumerated elements are 
 - Items are removed from the buffer as soon as all consumers have consumed them.
 - You can specify a maximum buffer limit to ensure that one consumer does not race ahead, filling
   the internal buffer with massive amounts of data and allocating large amounts of memory.
+- You can specify a minimum size that the buffer must reach before the implementation will attempt
+  a tidy-up of consumed items (to prevent unnecessary processing "churn" at the expense of slightly
+  higher memory usage).
