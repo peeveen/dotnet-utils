@@ -1,3 +1,4 @@
+using System.Text.Json;
 using FluentAssertions;
 using Peeveen.Utils.Dynamic;
 
@@ -43,37 +44,12 @@ namespace Peeveen.Utils.Test.Dynamic {
 			arrayThingByIndex.Should().Be(44.6);
 		}
 
-		[Fact]
-		public void TestFlattening() {
-			dynamic obj = new {
-				Name = "John",
-				Age = 30,
-				Address = new {
-					City = "New York",
-					ZipCode = "10001"
-				},
-				Array = new dynamic[] { 1, 2, new int[]{ 3,4 }, new{
-				Thing = 44.6
-			} },
-				Bool = true
-			};
-
-			var flatIncludingCollections = DynamicUtilities.Flatten(obj, includeCollections: true);
-			var flatExcludingCollections = DynamicUtilities.Flatten(obj, includeCollections: false);
-			var expectedWithoutCollections = new Dictionary<string, object> {
-				{ "Name", "John" },
-				{ "Age", 30 },
-				{ "Address_City", "New York" },
-				{ "Address_ZipCode", "10001" },
-				{ "Bool", true }
-			};
-			var expectedWithCollections = expectedWithoutCollections.Concat(new Dictionary<string, object> {
-				{ "Array_0", 1 },
-				{ "Array_1", 2 },
-				{ "Array_2_0", 3 },
-				{ "Array_2_1", 4 },
-				{ "Array_3_Thing", 44.6 },
-			}).ToDictionary();
+		private static void TestFlattening(
+			dynamic objectToFlatten,
+			ArrayFlatteningBehavior arrayBehavior,
+			Dictionary<string, object> expectedResults
+		) {
+			var flat = DynamicUtilities.Flatten(objectToFlatten, arrayFlatteningBehavior: arrayBehavior);
 			static void ValidateResult(dynamic result, Dictionary<string, object> expected) {
 				foreach (var kvp in expected) {
 					var dynamicDictionary = result as IDictionary<string, object?>;
@@ -82,8 +58,65 @@ namespace Peeveen.Utils.Test.Dynamic {
 					dynamicDictionary[kvp.Key].Should().Be(kvp.Value, $"Value for key {kvp.Key} should match");
 				}
 			}
-			ValidateResult(flatIncludingCollections, expectedWithCollections);
-			ValidateResult(flatExcludingCollections, expectedWithoutCollections);
+			ValidateResult(flat, expectedResults);
 		}
+
+		private static readonly dynamic FlattenTestObject = new {
+			Name = "John",
+			Age = 30,
+			Address = new {
+				City = "New York",
+				ZipCode = "10001"
+			},
+			Array = new dynamic[] { 1, 2, new int[]{ 3,4 }, new {
+				Thing = 44.6
+			} },
+			Bool = true
+		};
+
+		[Fact]
+		public void TestFlatteningWithIgnoredArrays() {
+			TestFlattening(FlattenTestObject, ArrayFlatteningBehavior.Ignore, new Dictionary<string, object> {
+				{ "Name", FlattenTestObject.Name },
+				{ "Age", FlattenTestObject.Age },
+				{ "Address_City", FlattenTestObject.Address.City },
+				{ "Address_ZipCode", FlattenTestObject.Address.ZipCode },
+				{ "Array", FlattenTestObject.Array },
+				{ "Bool", FlattenTestObject.Bool }
+			});
+		}
+		[Fact]
+		public void TestFlatteningWithOmittedArrays() =>
+			TestFlattening(FlattenTestObject, ArrayFlatteningBehavior.Omit, new Dictionary<string, object> {
+				{ "Name", FlattenTestObject.Name },
+				{ "Age", FlattenTestObject.Age },
+				{ "Address_City", FlattenTestObject.Address.City },
+				{ "Address_ZipCode", FlattenTestObject.Address.ZipCode },
+				{ "Bool", FlattenTestObject.Bool }
+			});
+		[Fact]
+		public void TestFlatteningWithJsonifiedArrays() =>
+			TestFlattening(FlattenTestObject, ArrayFlatteningBehavior.Jsonify, new Dictionary<string, object> {
+				{ "Name", FlattenTestObject.Name },
+				{ "Age", FlattenTestObject.Age },
+				{ "Address_City", FlattenTestObject.Address.City },
+				{ "Address_ZipCode", FlattenTestObject.Address.ZipCode },
+				{ "Array", JsonSerializer.Serialize(FlattenTestObject.Array) },
+				{ "Bool", FlattenTestObject.Bool }
+			});
+		[Fact]
+		public void TestFlatteningWithFlattenedArrays() =>
+			TestFlattening(FlattenTestObject, ArrayFlatteningBehavior.Flatten, new Dictionary<string, object> {
+				{ "Name", FlattenTestObject.Name },
+				{ "Age", FlattenTestObject.Age },
+				{ "Address_City", FlattenTestObject.Address.City },
+				{ "Address_ZipCode", FlattenTestObject.Address.ZipCode },
+				{ "Array_0", 1 },
+				{ "Array_1", 2 },
+				{ "Array_2_0", 3 },
+				{ "Array_2_1", 4 },
+				{ "Array_3_Thing", 44.6 },
+				{ "Bool", FlattenTestObject.Bool }
+			});
 	}
 }

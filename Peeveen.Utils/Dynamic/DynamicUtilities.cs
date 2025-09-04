@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Dynamic;
+using System.Text.Json;
 
 namespace Peeveen.Utils.Dynamic {
 	/// <summary>
@@ -25,6 +26,31 @@ namespace Peeveen.Utils.Dynamic {
 		/// Property type
 		/// </summary>
 		public Type Type { get; }
+	}
+
+	/// <summary>
+	/// How arrays should be treated by the Flatten() method.
+	/// </summary>
+	public enum ArrayFlatteningBehavior {
+		/// <summary>
+		/// Arrays will not be flattened, and will be included in the
+		/// flattened result "as-is".
+		/// </summary>
+		Ignore,
+		/// <summary>
+		/// Arrays will be omitted from the flattened result.
+		/// </summary>
+		Omit,
+		/// <summary>
+		/// Arrays will be serialized to JSON and included in the flattened result
+		/// as a string property.
+		/// </summary>
+		Jsonify,
+		/// <summary>
+		/// Each array element will become an individual property called
+		/// ParentPropertyName_n, where n is the array index.
+		/// </summary>
+		Flatten
 	}
 
 	/// <summary>
@@ -82,12 +108,16 @@ namespace Peeveen.Utils.Dynamic {
 		/// </summary>
 		/// <param name="obj">Dynamic object to examine.</param>
 		/// <param name="separator">Separator to use for combining property names.</param>
-		/// <param name="includeCollections">True to include collections (lists, arrays, etc).
-		/// If true, flattened values will end up as properties called CollectionProperty_n,
-		/// where n is the collection index. If false, collections remain unflattened in
-		/// the result object.</param>
+		/// <param name="arrayFlatteningBehavior">How to handle arrays/collections.</param>
+		/// <param name="jsonSerializerOptions">JSON serialization options to use if
+		/// arrayFlatteningBehavior is Jsonify.</param>
 		/// <returns></returns>
-		public static dynamic Flatten(dynamic obj, string separator = "_", bool includeCollections = false) {
+		public static dynamic Flatten(
+			dynamic obj,
+			string separator = "_",
+			ArrayFlatteningBehavior arrayFlatteningBehavior = ArrayFlatteningBehavior.Ignore,
+			JsonSerializerOptions jsonSerializerOptions = null
+		) {
 			IDictionary<string, object> result = new ExpandoObject();
 			string CombinePropertyNames(string prefix, string propName) =>
 				string.IsNullOrEmpty(prefix) ? propName : prefix + separator + propName;
@@ -108,12 +138,21 @@ namespace Peeveen.Utils.Dynamic {
 						var newPrefix = CombinePropertyNames(currentPrefix, kvp.Key);
 						Recurse(kvp.Value, newPrefix);
 					}
-				else if (currentObj is IEnumerable enumerable)
-					if (includeCollections)
-						RecurseEnumerable(enumerable, currentPrefix);
-					else
-						result[currentPrefix] = currentObj;
-				else {
+				else if (currentObj is IEnumerable enumerable) {
+					switch (arrayFlatteningBehavior) {
+						case ArrayFlatteningBehavior.Flatten:
+							RecurseEnumerable(enumerable, currentPrefix);
+							break;
+						case ArrayFlatteningBehavior.Jsonify:
+							result[currentPrefix] = JsonSerializer.Serialize(enumerable, jsonSerializerOptions);
+							break;
+						case ArrayFlatteningBehavior.Ignore:
+							result[currentPrefix] = enumerable;
+							break;
+						case ArrayFlatteningBehavior.Omit:
+							break;
+					}
+				} else {
 					// Some other object. Use reflection to get its public properties.
 					var type = (currentObj as object).GetType();
 					var properties = type.GetProperties();
