@@ -71,7 +71,11 @@ namespace Peeveen.Utils.Test.Dynamic {
 			Array = new dynamic[] { 1, 2, new int[]{ 3,4 }, new {
 				Thing = 44.6
 			} },
-			Bool = true
+			Bool = true,
+			X = new {
+				Y = "This is Y"
+			},
+			X_Y = "Conflict Test",
 		};
 
 		[Fact]
@@ -82,7 +86,8 @@ namespace Peeveen.Utils.Test.Dynamic {
 				{ "Address_City", FlattenTestObject.Address.City },
 				{ "Address_ZipCode", FlattenTestObject.Address.ZipCode },
 				{ "Array", FlattenTestObject.Array },
-				{ "Bool", FlattenTestObject.Bool }
+				{ "Bool", FlattenTestObject.Bool },
+				{ "X_Y", FlattenTestObject.X_Y }
 			});
 		}
 		[Fact]
@@ -92,7 +97,8 @@ namespace Peeveen.Utils.Test.Dynamic {
 				{ "Age", FlattenTestObject.Age },
 				{ "Address_City", FlattenTestObject.Address.City },
 				{ "Address_ZipCode", FlattenTestObject.Address.ZipCode },
-				{ "Bool", FlattenTestObject.Bool }
+				{ "Bool", FlattenTestObject.Bool },
+				{ "X_Y", FlattenTestObject.X_Y }
 			});
 		[Fact]
 		public void TestFlatteningWithJsonifiedArrays() =>
@@ -102,7 +108,8 @@ namespace Peeveen.Utils.Test.Dynamic {
 				{ "Address_City", FlattenTestObject.Address.City },
 				{ "Address_ZipCode", FlattenTestObject.Address.ZipCode },
 				{ "Array", JsonSerializer.Serialize(FlattenTestObject.Array) },
-				{ "Bool", FlattenTestObject.Bool }
+				{ "Bool", FlattenTestObject.Bool },
+				{ "X_Y", FlattenTestObject.X_Y }
 			});
 		[Fact]
 		public void TestFlatteningWithFlattenedArrays() =>
@@ -116,7 +123,8 @@ namespace Peeveen.Utils.Test.Dynamic {
 				{ "Array_2_0", 3 },
 				{ "Array_2_1", 4 },
 				{ "Array_3_Thing", 44.6 },
-				{ "Bool", FlattenTestObject.Bool }
+				{ "Bool", FlattenTestObject.Bool },
+				{ "X_Y", FlattenTestObject.X_Y }
 			});
 	}
 }

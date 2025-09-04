@@ -105,6 +105,11 @@ namespace Peeveen.Utils.Dynamic {
 		/// Examines the given object, and flattens any nested structures.
 		/// Nested values will be extracted and placed at the root level with
 		/// a property name combined from the parent properties.
+		/// Note that if a calculated property name clashes with an existing property
+		/// (e.g. you have a property "x" with a nested property "y" that would become
+		/// "x_y", but "x_y" already exists as a property at the level of "x") then
+		/// data will be lost (whichever property is encountered first in the collection
+		/// of properties will be overwritten by the later one).
 		/// </summary>
 		/// <param name="obj">Dynamic object to examine.</param>
 		/// <param name="separator">Separator to use for combining property names.</param>
