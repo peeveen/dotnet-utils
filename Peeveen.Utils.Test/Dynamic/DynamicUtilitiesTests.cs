@@ -25,16 +25,16 @@ namespace Peeveen.Utils.Test.Dynamic {
 		public void TestDynamicExpressionEvaluation() {
 			((string)DynamicTestObject.Name).Should().Be("John");
 
-			var name = (string)DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Name");
-			var age = (int)DynamicUtilities.EvaluateExpression<int>(DynamicTestObject, "Age");
-			var city = (string)DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Address.City");
-			var zipCode = (string)DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Address.ZipCode");
-			var zipCodeByIndex = (string)DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Address[\"ZipCode\"]");
-			var arrayItem = (int)DynamicUtilities.EvaluateExpression<int>(DynamicTestObject, "Array[1]");
-			var arrayThingByIndex = (double)DynamicUtilities.EvaluateExpression<double>(DynamicTestObject, "Array[3][\"Thing\"]");
-			var arrayThing = (double)DynamicUtilities.EvaluateExpression<double>(DynamicTestObject, "Array[3].Thing");
-			var arrayThingUsingDotSyntax = (double)DynamicUtilities.EvaluateExpression<double>(DynamicTestObject, "Array.3.Thing");
-			var booleanValue = (bool)DynamicUtilities.EvaluateExpression<bool>(DynamicTestObject, "Bool");
+			string name = DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Name");
+			int age = DynamicUtilities.EvaluateExpression<int>(DynamicTestObject, "Age");
+			string city = DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Address.City");
+			string zipCode = DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Address.ZipCode");
+			string zipCodeByIndex = DynamicUtilities.EvaluateExpression<string>(DynamicTestObject, "Address[\"ZipCode\"]");
+			int arrayItem = DynamicUtilities.EvaluateExpression<int>(DynamicTestObject, "Array[1]");
+			double arrayThingByIndex = DynamicUtilities.EvaluateExpression<double>(DynamicTestObject, "Array[3][\"Thing\"]");
+			double arrayThing = DynamicUtilities.EvaluateExpression<double>(DynamicTestObject, "Array[3].Thing");
+			double arrayThingUsingDotSyntax = DynamicUtilities.EvaluateExpression<double>(DynamicTestObject, "Array.3.Thing");
+			bool booleanValue = DynamicUtilities.EvaluateExpression<bool>(DynamicTestObject, "Bool");
 
 			name.Should().Be("John");
 			age.Should().Be(30);
