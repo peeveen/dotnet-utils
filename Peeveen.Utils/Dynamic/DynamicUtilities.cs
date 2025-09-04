@@ -74,7 +74,7 @@ namespace Peeveen.Utils.Dynamic {
 				return readOnlyList[index];
 			if (obj is IList<object> list)
 				return list[index];
-			return ((Array)obj).GetValue(index);
+			return ((System.Array)obj).GetValue(index);
 		}
 
 		private static T EvaluateExpression<T>(dynamic obj, string[] parts, int partIndex = 0) {

@@ -73,3 +73,10 @@ This class uses a internal `List` buffer into which the enumerated elements are 
 - You can specify a minimum size that the buffer must reach before the implementation will attempt
   a tidy-up of consumed items (to prevent unnecessary processing "churn" at the expense of slightly
   higher memory usage).
+
+## `ArrayExtensions`
+
+Extension functions for working with arrays.
+
+- `ToMultidimensionalArray()` will convert an array-of-arrays (of arrays, etc) to a multidimensional
+  array. For example, it will convert an `int[][][]` to an `int[,,]`.
