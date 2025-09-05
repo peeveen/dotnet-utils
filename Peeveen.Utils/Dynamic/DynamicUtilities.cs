@@ -187,5 +187,58 @@ namespace Peeveen.Utils.Dynamic {
 					yield return new DynamicPropertyInfo(prop.Name, prop.PropertyType);
 			}
 		}
+
+		/// <summary>
+		/// Merges the properties of two dynamic objects into a new object.
+		/// </summary>
+		/// <param name="obj1">First object</param>
+		/// <param name="obj2">Second object</param>
+		/// <returns>Merged object. In the event of property name collision, the property
+		/// in obj2 will prevail. If both properties are complex objects, they will be merged recursively.
+		/// If obj2 is a value object, it will be returned as the result.
+		/// If either value is null, the other value will be returned.</returns>
+		public static dynamic Merge(dynamic obj1, dynamic obj2) {
+			// Any null will return the other value.
+			if (obj1 == null)
+				return obj2;
+			if (obj2 == null)
+				return obj1;
+
+			var valueDictionary = new Dictionary<string, List<object>>();
+			List<object> GetValueList(string key) => valueDictionary.TryGetValue(key, out var l) ? l : (valueDictionary[key] = new List<object>());
+			object GetValues(object obj) {
+				if (obj is IDictionary<string, object> dict)
+					foreach (var kvp in dict)
+						GetValueList(kvp.Key).Add(kvp.Value);
+				else if (!(obj is ValueType) && !(obj is string)) {
+					var type = obj.GetType();
+					var properties = type.GetProperties();
+					foreach (var prop in properties)
+						GetValueList(prop.Name).Add(prop.GetValue(obj));
+				} else
+					return obj;
+				return null;
+			}
+			// Get the values from both objects.
+			// The GetValues function will return the input value if it is a ValueType or string.
+			GetValues(obj1);
+			var value2 = GetValues(obj2);
+
+			// So if the second value was a ValueType or string, just return it.
+			if (value2 != null)
+				return obj2;
+			// If there were no properties found in either object, just return the second object.
+			if (valueDictionary.Count == 0)
+				return obj2;
+
+			// Create a new ExpandoObject and populate it with the merged values.
+			dynamic result = new ExpandoObject();
+			var resultDict = (IDictionary<string, object>)result;
+			foreach (var kvp in valueDictionary)
+				// If a property only existed in one of the objects, use that value.
+				// But if it existed in both, merge them recursively.
+				resultDict[kvp.Key] = kvp.Value.Count == 1 ? kvp.Value[0] : Merge(kvp.Value[0], kvp.Value[1]);
+			return result;
+		}
 	}
 }
