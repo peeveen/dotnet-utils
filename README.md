@@ -50,6 +50,7 @@ A static class with a few methods for working with `dynamic` data.
 - `Flatten()` will flatten all nested objects of a `dynamic` into top-level properties (optionally
   including arrays/lists), with property names made from a combination of parent property names using
   a custom separator.
+- `Merge()` will merge the properties of two objects into a new object.
 
 ## `MultiplexingAsyncEnumerable`
 
