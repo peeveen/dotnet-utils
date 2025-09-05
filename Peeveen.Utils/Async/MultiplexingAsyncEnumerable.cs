@@ -22,6 +22,7 @@ namespace Peeveen.Utils.Async {
 		internal PersistingEnumerator<T> _persistingEnumerator;
 		private readonly object _enumeratorLock = new object();
 		private int _consumerIndex = -1;
+		private int _bufferCleanupTriggerSize;
 
 		/// <summary>
 		/// Constructor.
@@ -29,10 +30,18 @@ namespace Peeveen.Utils.Async {
 		/// <param name="source">Source enumerable to wrap.</param>
 		/// <param name="consumerCount">Number of consumers.</param>
 		/// <param name="maxBufferSize">Maximum buffer size. If less than 1, buffer size will be limitless.</param>
-		internal MultiplexingAsyncEnumerable(IAsyncEnumerable<T> source, int consumerCount, int maxBufferSize = 0) {
+		/// <param name="bufferCleanupTriggerSize">Buffer will be cleaned up if it contains at least this number of items.</param>
+		internal MultiplexingAsyncEnumerable(IAsyncEnumerable<T> source, int consumerCount, int maxBufferSize = 0, int bufferCleanupTriggerSize = 1) {
+			if (bufferCleanupTriggerSize < 1)
+				throw new ArgumentException("Value must be greater than zero.", nameof(bufferCleanupTriggerSize));
+			if (bufferCleanupTriggerSize > maxBufferSize && maxBufferSize > 0)
+				throw new ArgumentException("Value must be less than or equal to maxBufferSize.", nameof(bufferCleanupTriggerSize));
+			if (consumerCount < 1)
+				throw new ArgumentException("There must be at least one consumer.", nameof(consumerCount));
 			_consumerCount = consumerCount;
 			_source = source;
 			_maxBufferSize = maxBufferSize;
+			_bufferCleanupTriggerSize = bufferCleanupTriggerSize;
 		}
 
 		/// <summary>
@@ -52,9 +61,8 @@ namespace Peeveen.Utils.Async {
 				throw new InvalidOperationException($"This {nameof(MultiplexingAsyncEnumerable<T>)} supports only {_consumerCount} enumerations, but {nameof(GetAsyncEnumerator)} has now been called {_consumerIndex + 1} times.");
 			lock (_enumeratorLock) {
 				if (_persistingEnumerator == null)
-					_persistingEnumerator = new PersistingEnumerator<T>(_source.GetAsyncEnumerator(cancellationToken), _consumerCount, _maxBufferSize);
-				// Probably overkill to use Interlocked here, but ...
-				Interlocked.Increment(ref _persistingEnumerator._usages);
+					_persistingEnumerator = new PersistingEnumerator<T>(_source.GetAsyncEnumerator(cancellationToken), _consumerCount, _maxBufferSize, _bufferCleanupTriggerSize);
+				++_persistingEnumerator._usages;
 			}
 			return new MultiplexingAsyncEnumerator<T>(_persistingEnumerator, consumerIndex);
 		}
@@ -88,10 +96,11 @@ namespace Peeveen.Utils.Async {
 		// It is shared across multiple instances of MultiplexingAsyncEnumerator, so when
 		// Dispose() is called, it should NOT dispose until there are no active usages.
 		internal int _usages;
+		// The buffer size cleanup limit trigger.
+		private readonly int _bufferCleanupTriggerSize;
 
-		internal PersistingEnumerator(IAsyncEnumerator<T> source, int consumerCount, int maxBufferSize) {
-			if (consumerCount < 1)
-				throw new ArgumentException("There must be at least one consumer.", nameof(consumerCount));
+		internal PersistingEnumerator(IAsyncEnumerator<T> source, int consumerCount, int maxBufferSize, int bufferCleanupTriggerSize) {
+			_bufferCleanupTriggerSize = bufferCleanupTriggerSize;
 			_bufferSemaphore = maxBufferSize > 0 ? new SemaphoreSlim(maxBufferSize, maxBufferSize) : null;
 			_singleConsumer = consumerCount == 1;
 			_source = source;
@@ -159,25 +168,31 @@ namespace Peeveen.Utils.Async {
 			lock (_bufferLock) {
 				// First, tidy up the buffer, deallocating items that every
 				// consumer has consumed.
-				// Check how far each consumer has gone.
-				// If they're all past the start of the buffer, we can
-				// remove items from the start.
-				var minIndex = Math.Max(_consumerIndices.Min(), 0);
-				var itemsToRemove = minIndex - _bufferStartIndex;
-				_bufferStartIndex = minIndex;
-				_buffer.RemoveRange(0, itemsToRemove);
-				if (itemsToRemove > 0)
-					_bufferSemaphore?.Release(itemsToRemove);
+				// We only do this once the buffer reaches a minimum size.
+				var bufferSize = _buffer.Count;
+				if (bufferSize >= _bufferCleanupTriggerSize) {
+					// Check how far each consumer has gone.
+					// If they're all past the start of the buffer, we can
+					// remove items from the start.
+					var minIndex = Math.Max(_consumerIndices.Min(), 0);
+					var itemsToRemove = minIndex - _bufferStartIndex;
+					_bufferStartIndex = minIndex;
+					_buffer.RemoveRange(0, itemsToRemove);
+					if (itemsToRemove > 0) {
+						_bufferSemaphore?.Release(itemsToRemove);
+						bufferSize -= itemsToRemove;
+					}
+				}
 
 				// Figure out the actual buffer index that we want to access.
 				var bufferIndex = consumerIndex - _bufferStartIndex;
 				// Do we need to add more data to the buffer?
 				// Or do we already have enough?
-				if (bufferIndex >= _buffer.Count) {
+				if (bufferIndex >= bufferSize) {
 					// Not enough data. Add a task that will retrieve the next
 					// item from the wrapped enumerator (if available).
 					_buffer.Add(GetNextItemAsync());
-					_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, _buffer.Count);
+					_maxBufferSizeUsed = Math.Max(_maxBufferSizeUsed, bufferSize + 1);
 				}
 				// There should now be enough. At any time, the bufferIndex is
 				// guaranteed to be, at most, one greater than the current
@@ -237,8 +252,18 @@ namespace Peeveen.Utils.Async {
 		/// <param name="source">Source enumerable to wrap.</param>
 		/// <param name="consumerCount">Number of consumers.</param>
 		/// <param name="maxBufferSize">Maximum buffer size. If less than 1, buffer size will be limitless.</param>
+		/// <param name="bufferCleanupTriggerSize">Items in the internal buffer (containing cached data) will be
+		/// removed once all consumers have consumed them. The value of this parameter controls how often this
+		/// happens. The cleanup will only be performed (during MoveNextAsync) if the internal buffer contains
+		/// AT LEAST the number of items specified by this parameter. This value of this parameter MUST be
+		/// less than or equal to maxBufferSize.</param>
 		/// <returns></returns>
-		public static MultiplexingAsyncEnumerable<T> ToMultiplexingAsyncEnumerable<T>(this IAsyncEnumerable<T> source, int consumerCount, int maxBufferSize = 0) =>
-			new MultiplexingAsyncEnumerable<T>(source, consumerCount, maxBufferSize);
+		public static MultiplexingAsyncEnumerable<T> ToMultiplexingAsyncEnumerable<T>(
+			this IAsyncEnumerable<T> source,
+			int consumerCount,
+			int maxBufferSize = 0,
+			int bufferCleanupTriggerSize = 1
+		) =>
+			new MultiplexingAsyncEnumerable<T>(source, consumerCount, maxBufferSize, bufferCleanupTriggerSize);
 	}
 }
